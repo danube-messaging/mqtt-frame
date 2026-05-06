@@ -22,3 +22,8 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 [features]
 default = []
 serde-support = ["serde"]
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
+rumqttc = "0.24"
+futures = "0.3"
