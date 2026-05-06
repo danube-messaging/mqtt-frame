@@ -3,7 +3,10 @@ use std::io::Cursor;
 use tokio_util::codec::{Decoder, Encoder};
 
 use crate::error::MqttError;
-use crate::packet::{Connect, MqttPacket, ProtocolLevel, Publish, PubAck, PubRec, PubRel, PubComp, Subscribe, SubAck, Unsubscribe, UnsubAck, Property};
+use crate::packet::{
+    Connect, MqttPacket, Property, ProtocolLevel, PubAck, PubComp, PubRec, PubRel, Publish, SubAck,
+    Subscribe, UnsubAck, Unsubscribe,
+};
 use crate::utils::read_var_int;
 
 pub struct MqttCodec {
@@ -126,11 +129,15 @@ impl Decoder for MqttCodec {
                     if let Some((props_len, _)) = read_var_int(&mut payload_cursor)? {
                         let props_end = payload_cursor.position() as usize + props_len as usize;
                         if total_len < header_len + props_end {
-                            return Err(MqttError::MalformedPacket("Properties length exceeds packet"));
+                            return Err(MqttError::MalformedPacket(
+                                "Properties length exceeds packet",
+                            ));
                         }
                         properties = parse_properties(&mut payload_cursor, props_len as usize)?;
                     } else {
-                        return Err(MqttError::MalformedPacket("Incomplete v5 properties in PUBLISH"));
+                        return Err(MqttError::MalformedPacket(
+                            "Incomplete v5 properties in PUBLISH",
+                        ));
                     }
                 }
 
@@ -148,10 +155,18 @@ impl Decoder for MqttCodec {
                     payload,
                 })
             }
-            4 => MqttPacket::PubAck(PubAck { packet_id: payload_cursor.get_u16() }),
-            5 => MqttPacket::PubRec(PubRec { packet_id: payload_cursor.get_u16() }),
-            6 => MqttPacket::PubRel(PubRel { packet_id: payload_cursor.get_u16() }),
-            7 => MqttPacket::PubComp(PubComp { packet_id: payload_cursor.get_u16() }),
+            4 => MqttPacket::PubAck(PubAck {
+                packet_id: payload_cursor.get_u16(),
+            }),
+            5 => MqttPacket::PubRec(PubRec {
+                packet_id: payload_cursor.get_u16(),
+            }),
+            6 => MqttPacket::PubRel(PubRel {
+                packet_id: payload_cursor.get_u16(),
+            }),
+            7 => MqttPacket::PubComp(PubComp {
+                packet_id: payload_cursor.get_u16(),
+            }),
             8 => {
                 // SUBSCRIBE
                 let packet_id = payload_cursor.get_u16();
@@ -173,7 +188,10 @@ impl Decoder for MqttCodec {
                 while payload_cursor.has_remaining() {
                     return_codes.push(payload_cursor.get_u8());
                 }
-                MqttPacket::SubAck(SubAck { packet_id, return_codes })
+                MqttPacket::SubAck(SubAck {
+                    packet_id,
+                    return_codes,
+                })
             }
             10 => {
                 // UNSUBSCRIBE
@@ -187,7 +205,9 @@ impl Decoder for MqttCodec {
                 }
                 MqttPacket::Unsubscribe(Unsubscribe { packet_id, filters })
             }
-            11 => MqttPacket::UnsubAck(UnsubAck { packet_id: payload_cursor.get_u16() }),
+            11 => MqttPacket::UnsubAck(UnsubAck {
+                packet_id: payload_cursor.get_u16(),
+            }),
             12 => MqttPacket::PingReq,
             13 => MqttPacket::PingResp,
             14 => MqttPacket::Disconnect,
@@ -247,11 +267,15 @@ impl Encoder<MqttPacket> for MqttCodec {
             MqttPacket::SubAck(suback) => {
                 dst.put_u8(0x90);
                 // Length is 2 (packet id) + number of return codes + property length (if v5)
-                let props_len = if self.protocol_level == ProtocolLevel::V5 { 1 } else { 0 };
+                let props_len = if self.protocol_level == ProtocolLevel::V5 {
+                    1
+                } else {
+                    0
+                };
                 let remaining_len = 2 + suback.return_codes.len() as u32 + props_len;
                 crate::utils::write_var_int(remaining_len, dst)?;
                 dst.put_u16(suback.packet_id);
-                
+
                 if self.protocol_level == ProtocolLevel::V5 {
                     dst.put_u8(0); // 0 Properties
                 }
@@ -284,7 +308,10 @@ impl Encoder<MqttPacket> for MqttCodec {
     }
 }
 
-pub fn parse_properties(cursor: &mut Cursor<&[u8]>, length: usize) -> Result<Vec<Property>, MqttError> {
+pub fn parse_properties(
+    cursor: &mut Cursor<&[u8]>,
+    length: usize,
+) -> Result<Vec<Property>, MqttError> {
     let mut properties = Vec::new();
     let start_pos = cursor.position() as usize;
 
@@ -297,13 +324,17 @@ pub fn parse_properties(cursor: &mut Cursor<&[u8]>, length: usize) -> Result<Vec
                     let str_len = cursor.get_u16() as usize;
                     let mut str_bytes = vec![0; str_len];
                     cursor.copy_to_slice(&mut str_bytes);
-                    properties.push(Property::ContentType(String::from_utf8_lossy(&str_bytes).to_string()));
+                    properties.push(Property::ContentType(
+                        String::from_utf8_lossy(&str_bytes).to_string(),
+                    ));
                 }
                 0x08 => {
                     let str_len = cursor.get_u16() as usize;
                     let mut str_bytes = vec![0; str_len];
                     cursor.copy_to_slice(&mut str_bytes);
-                    properties.push(Property::ResponseTopic(String::from_utf8_lossy(&str_bytes).to_string()));
+                    properties.push(Property::ResponseTopic(
+                        String::from_utf8_lossy(&str_bytes).to_string(),
+                    ));
                 }
                 0x09 => {
                     let bin_len = cursor.get_u16() as usize;
@@ -335,6 +366,6 @@ pub fn parse_properties(cursor: &mut Cursor<&[u8]>, length: usize) -> Result<Vec
             break;
         }
     }
-    
+
     Ok(properties)
 }

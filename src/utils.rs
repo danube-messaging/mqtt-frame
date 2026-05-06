@@ -1,5 +1,5 @@
-use bytes::{Buf, BufMut};
 use crate::error::MqttError;
+use bytes::{Buf, BufMut};
 
 /// Reads an MQTT variable length integer from a buffer.
 /// Returns a tuple of `(value, bytes_read)` if successful, or an error.
@@ -8,7 +8,7 @@ pub fn read_var_int(src: &mut std::io::Cursor<&[u8]>) -> Result<Option<(u32, usi
     let mut multiplier: u32 = 1;
     let mut value: u32 = 0;
     let mut bytes_read: usize = 0;
-    
+
     let chunk = src.chunk();
     let mut iter = chunk.iter();
 
@@ -17,7 +17,9 @@ pub fn read_var_int(src: &mut std::io::Cursor<&[u8]>) -> Result<Option<(u32, usi
             bytes_read += 1;
             value += (encoded_byte & 127) as u32 * multiplier;
             if multiplier > 128 * 128 * 128 {
-                return Err(MqttError::MalformedPacket("Malformed Variable Byte Integer"));
+                return Err(MqttError::MalformedPacket(
+                    "Malformed Variable Byte Integer",
+                ));
             }
             multiplier *= 128;
             if (encoded_byte & 128) == 0 {
