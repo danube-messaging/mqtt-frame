@@ -7,6 +7,18 @@ pub enum ProtocolLevel {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Property {
+    PayloadFormatIndicator(u8),
+    MessageExpiryInterval(u32),
+    TopicAlias(u16),
+    ResponseTopic(String),
+    CorrelationData(Vec<u8>),
+    UserProperty(String, String),
+    SubscriptionIdentifier(u32),
+    ContentType(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MqttPacket {
     Connect(Connect),
     ConnAck(ConnAck),
@@ -67,6 +79,7 @@ pub struct Publish {
     pub retain: bool,
     pub topic: String,
     pub packet_id: Option<u16>, // Only present if QoS > 0
+    pub properties: Vec<Property>,
     pub payload: Bytes,
 }
 
