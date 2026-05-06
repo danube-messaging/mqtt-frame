@@ -1,9 +1,14 @@
 [package]
 name = "mqtt-frame"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A lightweight, Sans-I/O MQTT v3.1.1 and v5.0 protocol codec and parser for Danube."
-license = "MIT"
+keywords = ["mqtt", "codec", "tokio-util", "parser", "iot"]
+authors = ["Dan Rusei <dan.rusei@gmail.com>"]
+repository = "https://github.com/danube-messaging/danube"
+documentation = "https://docs.rs/mqtt-frame"
+readme = "README.md"
+license = "Apache-2.0"
 
 [dependencies]
 bytes = { version = "1.11" }
