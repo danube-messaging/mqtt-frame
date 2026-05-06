@@ -1,0 +1,19 @@
+[package]
+name = "mqtt-frame"
+version = "0.1.0"
+edition = "2021"
+description = "A lightweight, Sans-I/O MQTT v3.1.1 and v5.0 protocol codec and parser for Danube."
+license = "MIT"
+
+[dependencies]
+bytes = { version = "1.11" }
+tokio-util = { version = "0.7", features = ["codec"] }
+thiserror = "2.0"
+tracing = "0.1.44"
+
+# Optional: if we want to serialize packets for logging/debugging
+serde = { version = "1.0", features = ["derive"], optional = true }
+
+[features]
+default = []
+serde-support = ["serde"]
