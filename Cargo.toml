@@ -1,6 +1,6 @@
 [package]
 name = "mqtt-frame"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "A lightweight, Sans-I/O MQTT v3.1.1 and v5.0 protocol codec and parser for Danube."
 keywords = ["mqtt", "codec", "tokio-util", "parser", "iot"]
@@ -22,3 +22,8 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 [features]
 default = []
 serde-support = ["serde"]
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
+rumqttc = "0.24"
+futures = "0.3"
