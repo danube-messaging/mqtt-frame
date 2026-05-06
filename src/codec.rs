@@ -3,7 +3,7 @@ use std::io::Cursor;
 use tokio_util::codec::{Decoder, Encoder};
 
 use crate::error::MqttError;
-use crate::packet::{Connect, MqttPacket, ProtocolLevel, Publish};
+use crate::packet::{Connect, MqttPacket, ProtocolLevel, Publish, PubAck, PubRec, PubRel, PubComp, Subscribe, SubAck, Unsubscribe, UnsubAck};
 use crate::utils::read_var_int;
 
 pub struct MqttCodec;
@@ -111,7 +111,48 @@ impl Decoder for MqttCodec {
                     payload,
                 })
             }
+            4 => MqttPacket::PubAck(PubAck { packet_id: payload_cursor.get_u16() }),
+            5 => MqttPacket::PubRec(PubRec { packet_id: payload_cursor.get_u16() }),
+            6 => MqttPacket::PubRel(PubRel { packet_id: payload_cursor.get_u16() }),
+            7 => MqttPacket::PubComp(PubComp { packet_id: payload_cursor.get_u16() }),
+            8 => {
+                // SUBSCRIBE
+                let packet_id = payload_cursor.get_u16();
+                let mut filters = Vec::new();
+                while payload_cursor.has_remaining() {
+                    let topic_len = payload_cursor.get_u16() as usize;
+                    let mut topic_bytes = vec![0; topic_len];
+                    payload_cursor.copy_to_slice(&mut topic_bytes);
+                    let topic = String::from_utf8_lossy(&topic_bytes).to_string();
+                    let qos = payload_cursor.get_u8();
+                    filters.push((topic, qos));
+                }
+                MqttPacket::Subscribe(Subscribe { packet_id, filters })
+            }
+            9 => {
+                // SUBACK
+                let packet_id = payload_cursor.get_u16();
+                let mut return_codes = Vec::new();
+                while payload_cursor.has_remaining() {
+                    return_codes.push(payload_cursor.get_u8());
+                }
+                MqttPacket::SubAck(SubAck { packet_id, return_codes })
+            }
+            10 => {
+                // UNSUBSCRIBE
+                let packet_id = payload_cursor.get_u16();
+                let mut filters = Vec::new();
+                while payload_cursor.has_remaining() {
+                    let topic_len = payload_cursor.get_u16() as usize;
+                    let mut topic_bytes = vec![0; topic_len];
+                    payload_cursor.copy_to_slice(&mut topic_bytes);
+                    filters.push(String::from_utf8_lossy(&topic_bytes).to_string());
+                }
+                MqttPacket::Unsubscribe(Unsubscribe { packet_id, filters })
+            }
+            11 => MqttPacket::UnsubAck(UnsubAck { packet_id: payload_cursor.get_u16() }),
             12 => MqttPacket::PingReq,
+            13 => MqttPacket::PingResp,
             14 => MqttPacket::Disconnect,
             _ => {
                 return Err(MqttError::ProtocolError(format!(
@@ -141,9 +182,47 @@ impl Encoder<MqttPacket> for MqttCodec {
                 dst.put_u8(0); // Remaining length is 0
             }
             MqttPacket::PubAck(puback) => {
-                dst.put_u8(0x40); // Type 4 (PUBACK)
-                dst.put_u8(2); // Remaining length is 2
+                dst.put_u8(0x40);
+                dst.put_u8(2);
                 dst.put_u16(puback.packet_id);
+            }
+            MqttPacket::PubRec(pubrec) => {
+                dst.put_u8(0x50);
+                dst.put_u8(2);
+                dst.put_u16(pubrec.packet_id);
+            }
+            MqttPacket::PubRel(pubrel) => {
+                dst.put_u8(0x62);
+                dst.put_u8(2);
+                dst.put_u16(pubrel.packet_id);
+            }
+            MqttPacket::PubComp(pubcomp) => {
+                dst.put_u8(0x70);
+                dst.put_u8(2);
+                dst.put_u16(pubcomp.packet_id);
+            }
+            MqttPacket::SubAck(suback) => {
+                dst.put_u8(0x90);
+                // Length is 2 (packet id) + number of return codes
+                let remaining_len = 2 + suback.return_codes.len() as u32;
+                crate::utils::write_var_int(remaining_len, dst)?;
+                dst.put_u16(suback.packet_id);
+                for rc in suback.return_codes {
+                    dst.put_u8(rc);
+                }
+            }
+            MqttPacket::UnsubAck(unsuback) => {
+                dst.put_u8(0xB0);
+                dst.put_u8(2);
+                dst.put_u16(unsuback.packet_id);
+            }
+            MqttPacket::PingReq => {
+                dst.put_u8(0xC0);
+                dst.put_u8(0);
+            }
+            MqttPacket::Disconnect => {
+                dst.put_u8(0xE0);
+                dst.put_u8(0);
             }
             _ => {
                 return Err(MqttError::ProtocolError(
