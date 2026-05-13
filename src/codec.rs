@@ -13,6 +13,11 @@ pub struct MqttCodec {
     /// Tracks the protocol level negotiated during CONNECT.
     /// Defaults to V311 for the first packet.
     pub protocol_level: ProtocolLevel,
+    /// Maximum allowed remaining length (bytes) for any MQTT packet.
+    /// `None` = no limit (backward-compatible default).
+    /// When exceeded, `decode()` returns `MqttError::PayloadTooLarge`
+    /// **before** allocating memory for the packet body.
+    pub max_packet_size: Option<usize>,
 }
 
 impl Default for MqttCodec {
@@ -25,6 +30,18 @@ impl MqttCodec {
     pub fn new() -> Self {
         Self {
             protocol_level: ProtocolLevel::V311,
+            max_packet_size: None,
+        }
+    }
+
+    /// Create a codec with a maximum packet size limit.
+    ///
+    /// Any packet whose `remaining_length` exceeds `max_size` is rejected
+    /// at the decode level before memory is allocated.
+    pub fn with_max_packet_size(max_size: usize) -> Self {
+        Self {
+            protocol_level: ProtocolLevel::V311,
+            max_packet_size: Some(max_size),
         }
     }
 }
@@ -51,6 +68,22 @@ impl Decoder for MqttCodec {
 
         let header_len = cursor.position() as usize;
         let total_len = header_len + remaining_length;
+
+        // Enforce max packet size BEFORE allocating memory.
+        // This prevents a single oversized PUBLISH from exhausting server RAM.
+        if let Some(max) = self.max_packet_size {
+            if remaining_length > max {
+                // If the oversized packet is already fully buffered, drain it
+                // to prevent the decoder from re-reading the same bytes forever.
+                if src.len() >= total_len {
+                    src.advance(total_len);
+                }
+                return Err(MqttError::PayloadTooLarge {
+                    size: remaining_length,
+                    limit: max,
+                });
+            }
+        }
 
         if src.len() < total_len {
             src.reserve(total_len - src.len());

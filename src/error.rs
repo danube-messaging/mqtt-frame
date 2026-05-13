@@ -15,8 +15,8 @@ pub enum MqttError {
     #[error("Unsupported protocol version")]
     UnsupportedVersion,
 
-    #[error("Payload too large")]
-    PayloadTooLarge,
+    #[error("Payload too large: {size} bytes exceeds limit of {limit} bytes")]
+    PayloadTooLarge { size: usize, limit: usize },
 }
 
 impl From<MqttError> for io::Error {
