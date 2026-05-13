@@ -116,4 +116,69 @@ mod tests {
             _ => panic!("Failed to decode V5 PUBLISH packet"),
         }
     }
+
+    #[test]
+    fn test_max_packet_size_rejects_oversized() {
+        // Set max to 10 bytes — any PUBLISH will exceed this
+        let mut codec = MqttCodec::with_max_packet_size(10);
+        let mut buf = BytesMut::new();
+
+        // PUBLISH with remaining_length = 13 (> 10 limit)
+        buf.extend_from_slice(&[0x32, 0x0D]); // Type 3, QoS 1, remaining = 13
+        buf.extend_from_slice(&[0x00, 0x04, b't', b'e', b's', b't']); // topic "test"
+        buf.extend_from_slice(&[0x00, 0x0A]); // packet ID 10
+        buf.extend_from_slice(b"hello"); // payload
+
+        let result = codec.decode(&mut buf);
+        match result {
+            Err(crate::MqttError::PayloadTooLarge { size, limit }) => {
+                assert_eq!(size, 13);
+                assert_eq!(limit, 10);
+            }
+            other => panic!("Expected PayloadTooLarge, got: {:?}", other),
+        }
+
+        // Buffer should be drained (packet was fully present)
+        assert!(
+            buf.is_empty(),
+            "oversized packet should be drained from buffer"
+        );
+    }
+
+    #[test]
+    fn test_max_packet_size_accepts_within_limit() {
+        // Set max to 20 bytes — PUBLISH with remaining=13 fits
+        let mut codec = MqttCodec::with_max_packet_size(20);
+        let mut buf = BytesMut::new();
+
+        buf.extend_from_slice(&[0x32, 0x0D]); // remaining = 13
+        buf.extend_from_slice(&[0x00, 0x04, b't', b'e', b's', b't']);
+        buf.extend_from_slice(&[0x00, 0x0A]);
+        buf.extend_from_slice(b"hello");
+
+        let result = codec.decode(&mut buf).unwrap();
+        match result {
+            Some(MqttPacket::Publish(publish)) => {
+                assert_eq!(publish.topic, "test");
+                assert_eq!(publish.payload.as_ref(), b"hello");
+            }
+            other => panic!("Expected Publish, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_no_max_packet_size_accepts_any() {
+        // Default codec (no limit)
+        let mut codec = MqttCodec::new();
+        assert!(codec.max_packet_size.is_none());
+
+        let mut buf = BytesMut::new();
+        buf.extend_from_slice(&[0x32, 0x0D]);
+        buf.extend_from_slice(&[0x00, 0x04, b't', b'e', b's', b't']);
+        buf.extend_from_slice(&[0x00, 0x0A]);
+        buf.extend_from_slice(b"hello");
+
+        let result = codec.decode(&mut buf).unwrap();
+        assert!(matches!(result, Some(MqttPacket::Publish(_))));
+    }
 }
