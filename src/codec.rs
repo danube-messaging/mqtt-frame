@@ -158,13 +158,12 @@ impl Decoder for MqttCodec {
             4 => {
                 let packet_id = payload_cursor.get_u16();
                 // MQTT v5: reason code follows packet_id if remaining_length > 2
-                let reason_code = if self.protocol_level == ProtocolLevel::V5
-                    && remaining_length > 2
-                {
-                    Some(payload_cursor.get_u8())
-                } else {
-                    None
-                };
+                let reason_code =
+                    if self.protocol_level == ProtocolLevel::V5 && remaining_length > 2 {
+                        Some(payload_cursor.get_u8())
+                    } else {
+                        None
+                    };
                 MqttPacket::PubAck(PubAck {
                     packet_id,
                     reason_code,
