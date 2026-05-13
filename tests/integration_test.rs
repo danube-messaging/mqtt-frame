@@ -55,6 +55,7 @@ async fn spawn_mock_broker(version: ProtocolLevel) -> u16 {
         framed
             .send(MqttPacket::PubAck(mqtt_frame::packet::PubAck {
                 packet_id: 1, // rumqttc will use packet ID 1 for the first message
+                reason_code: None,
             }))
             .await
             .unwrap();

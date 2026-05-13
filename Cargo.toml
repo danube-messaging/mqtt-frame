@@ -1,6 +1,6 @@
 [package]
 name = "mqtt-frame"
-version = "0.1.2"
+version = "0.1.4"
 edition = "2021"
 description = "A lightweight, Sans-I/O MQTT v3.1.1 and v5.0 protocol codec and parser for Danube."
 keywords = ["mqtt", "codec", "tokio-util", "parser", "iot"]

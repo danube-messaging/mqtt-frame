@@ -155,9 +155,21 @@ impl Decoder for MqttCodec {
                     payload,
                 })
             }
-            4 => MqttPacket::PubAck(PubAck {
-                packet_id: payload_cursor.get_u16(),
-            }),
+            4 => {
+                let packet_id = payload_cursor.get_u16();
+                // MQTT v5: reason code follows packet_id if remaining_length > 2
+                let reason_code = if self.protocol_level == ProtocolLevel::V5
+                    && remaining_length > 2
+                {
+                    Some(payload_cursor.get_u8())
+                } else {
+                    None
+                };
+                MqttPacket::PubAck(PubAck {
+                    packet_id,
+                    reason_code,
+                })
+            }
             5 => MqttPacket::PubRec(PubRec {
                 packet_id: payload_cursor.get_u16(),
             }),
@@ -241,10 +253,22 @@ impl Encoder<MqttPacket> for MqttCodec {
             MqttPacket::PubAck(puback) => {
                 dst.put_u8(0x40);
                 if self.protocol_level == ProtocolLevel::V5 {
-                    dst.put_u8(3); // Remaining length: 2 (ID) + 1 (Property Length of 0)
-                    dst.put_u16(puback.packet_id);
-                    dst.put_u8(0); // 0 Properties
+                    let reason = puback.reason_code.unwrap_or(0x00);
+                    if reason == 0x00 {
+                        // MQTT v5 §3.4.2.1: if Reason Code is 0x00 and there
+                        // are no Properties, the Reason Code and Property
+                        // Length can be omitted (short form).
+                        dst.put_u8(2); // Remaining length: 2 (packet_id only)
+                        dst.put_u16(puback.packet_id);
+                    } else {
+                        // Non-success: must include reason code + empty properties
+                        dst.put_u8(4); // Remaining length: 2 (ID) + 1 (reason) + 1 (props=0)
+                        dst.put_u16(puback.packet_id);
+                        dst.put_u8(reason);
+                        dst.put_u8(0); // 0 Properties
+                    }
                 } else {
+                    // MQTT v3.1.1: no reason code
                     dst.put_u8(2); // Remaining length: 2 (ID)
                     dst.put_u16(puback.packet_id);
                 }
