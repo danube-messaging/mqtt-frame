@@ -86,6 +86,13 @@ pub struct Publish {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PubAck {
     pub packet_id: u16,
+    /// MQTT v5 reason code. Ignored for v3.1.1.
+    /// - `None` or `Some(0x00)` = Success
+    /// - `Some(0x80)` = Unspecified error
+    /// - `Some(0x83)` = Implementation specific error
+    /// - `Some(0x97)` = Quota exceeded
+    /// - `Some(0x99)` = Payload format invalid
+    pub reason_code: Option<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
